@@ -10,7 +10,7 @@ Use the `npm install` terminal command inside the application directory.
 
 ## Script
 
-A script is defined as `script.json` in a directory of your choice. Think of it just like a script used in acting. The script follows the following format.
+A script is defined as `script.json` in a directory of your choice. Think of it just like a script used in acting. The script follows the format below.
 
 ```javascript
 {
@@ -92,7 +92,7 @@ All assets such as the `script.json` and files should reside in the directory. T
 
 Additionally, any actors will be authenticated. You should update the actor's JWT tokens if any FAILED messages are reported.
 
-After all actors are authenticate, you can use the `enter` key on the terminal to send manual messages or wait to automatic messages to queue.
+After all actors are authenticated, you can use the `enter` key on the terminal to send manual messages or wait for automatic messages to queue.
 
 ### Getting the JWT Token
 This is the most technical part of the application since the app does not "log in" the actor.
@@ -106,8 +106,14 @@ After copying the JWT token, paste the token into the corresponding actor proper
 ```javascript
 {
   "actors": {
-    "Maya": "eyJhb...RtlUjg",
-    ...
+    "Maya": "eyJhb...RtlUjg"
+  }
+  ...
+}
 ```
 
 The token will appear much much longer than this example.
+
+# Stopping or Restarting
+
+After any updates to `script.json`, use `ctrl+c` to stop the app and restart it with the `node index.js <directory>` command.
