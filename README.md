@@ -17,6 +17,8 @@ The application's name should be the corresponding person, "Maya Davis" for exam
 - For demos and recordings, a [browser script](userscript.js) is used to remove the vertical app indicator.
 - A repeatable script is created with messages or file uploads corresponding to the "person".
 
+![Screenshot](screenshot.gif)
+
 ## Installation
 
 Use the `npm install` terminal command inside the application directory.
