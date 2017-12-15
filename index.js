@@ -160,7 +160,7 @@ function sendLine () {
 
   if (line.filename) {
     console.log(`${line.actor} sent ${line.filename}`)
-    actor.sendFile(spaceId, `${dir}/${line.filename}`)
+    actor.sendFile(spaceId, `${__dirname}/scripts/${dir}/${line.filename}`)
     .then(message => nextLine())
     .error(error => console.log(error))
   }
