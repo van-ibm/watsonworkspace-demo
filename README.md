@@ -119,7 +119,7 @@ Additionally, any actors will be authenticated and their photos uploaded.
 
 After all actors are authenticated, you can use the `enter` key on the terminal to send manual messages or wait for automatic messages to queue.
 
-# Stopping or Restarting
+## Stopping or Restarting
 
 After any updates to `script.json`, use `ctrl+c` to stop the app and restart it with the `node index.js <directory>` command.
 
@@ -131,3 +131,9 @@ Because these are applications and not real people there are a few limitations.
 - Bot messages will not trigger a MessageFocus, which is the underlined text used to initiate ActionFulfillment.
 
 To get around these issues, you should use a real user with the same name as the bot. This allows you to send actual messages to overcome these issues. Once your real messages are sent, you can resume the demo app with the `enter` key to process the next line.
+
+## Browser Script
+
+If demoing Workspace from the browser, you can use the [userscript.js](userscript.js)
+to remove the vertical indicator. Use either [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey) or [Greasemonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/) and copy the `userscript.js`
+script located in this project.
