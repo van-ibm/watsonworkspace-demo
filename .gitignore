@@ -1,6 +1,5 @@
 node_modules/
 public/
-scripts/
 .settings
 .project
 *.log

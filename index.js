@@ -15,18 +15,19 @@ const app = new SDK(
   process.env.APP_SECRET
 )
 
-// the directory is a command line argument
+// the directory with script and assets is a command line argument
 const dir = process.argv[2]
-const script = JSON.parse(fs.readFileSync(`${dir}/script.json`, 'utf8'))
+const script = JSON.parse(fs.readFileSync(`${__dirname}/scripts/${dir}/script.json`, 'utf8'))
 
 // track the current line and the callback to trigger the next line
 let lineCounter = 0
 let callback = null
 
-// authenticate this app
-app.authenticate().then(token => {
-  printNextLine()
+// this is important as the browser script looks for this rgb(255,255,255)
+const appColor = '#FFFFFF'
 
+// authenticate the demo app
+app.authenticate().then(token => {
   // read in from the terminal
   const rl = readline.createInterface({
     input: process.stdin,
@@ -37,13 +38,14 @@ app.authenticate().then(token => {
   // and input sent from the terminal triggers the next message to be sent
   rl.on('line', (line) => {
     sendLine()
-    printNextLine()
   })
 
-  // authenticate any actors' JWT tokens
-  authenticateActors((error) => {
+  // setup the actors
+  stageActors((error) => {
     // once authenticated, begin processing lines synchronously
     if (!error) {
+      printQueueCard()
+
       async.eachSeries(script.lines, (line, cb) => {
         const delay = line.delay === undefined ? simulateDelay(line) : line.delay
         const auto = line.auto || false
@@ -52,7 +54,6 @@ app.authenticate().then(token => {
 
         // auto messages are sent automatically based on the delay
         if (auto) {
-          console.log(`Waiting ${delay / 1000} seconds`)
           setTimeout(() => {
             sendLine(line)
           }, delay)
@@ -64,31 +65,51 @@ app.authenticate().then(token => {
   })
 })
 
-function printNextLine () {
+// prints the next line and details to you (the director)
+function printQueueCard () {
   const line = script.lines[lineCounter]
+  const actor = line.actor || 'App'
+  const delay = line.delay || 0
+
+  let queueCard = ''
+
+  if (line.auto) {
+    queueCard += `auto `
+  } else {
+    queueCard += `manual `
+  }
+
+  queueCard += `(${delay / 1000}s delay) ${actor}`
 
   if (line.text) {
-    console.log(`Line[${lineCounter}] '${line.text}'`)
+    console.log(`${queueCard}, '${line.text}'`)
   }
 
   if (line.filename) {
-    console.log(`Line[${lineCounter}] file=${line.filename}`)
+    console.log(`${queueCard} sends filename=${line.filename}`)
   }
 }
 
-// attempt to get the profile for each actor to validate token
-function authenticateActors (callback) {
+// authenticate and upload photo for actors
+function stageActors (callback) {
   const actors = Object.getOwnPropertyNames(script.actors)
 
   async.eachSeries(
     actors,
     (actor, cb) => {
-      const sdk = new SDK('', '', script.actors[actor])
+      const clientSecret = script.actors[actor].split(':')
+      const sdk = new SDK(clientSecret[0], clientSecret[1])
 
-      sdk.getMe(['id'])
-      .then(person => {
+      sdk.authenticate()
+      .then(token => {
+        // create the SDK for this actor
+        script.actors[actor] = sdk  // replace the token with the SDK
+
+        // upload the actor's photo
+        return sdk.uploadPhoto(`${__dirname}/photos/${actor}.jpg`)
+      })
+      .then(body => {
         console.log(`${actor} READY`)
-        script.actors[actor] = sdk  // replace the JWT token with the SDK
         cb()
       })
       .catch(error => {
@@ -116,37 +137,39 @@ function simulateDelay (line) {
   // just calculate the read time since people are watching the replay
   const delay = ((numOfReadWords / rate.read) * 60 * 1000)
 
-  // console.log(`simulateDelay=${delay}`)
-
   return delay
 }
 
 // send either a text message or file that is the current line in queue
 function sendLine () {
   const line = script.lines[lineCounter]
-
-  // get the actor's app or use the main app if no actor is specified
   const actor = script.actors[line.actor] || app
-
   const spaceId = script.spaces[line.space]
 
   if (line.text) {
-    console.log(`${line.actor} said, '${line.text}'`)
-    actor.sendSynchronousMessage(spaceId, line.text)
-    .then(message => {
-      lineCounter++
-      callback()
+    // get the actor's app or use the main app if no actor is specified
+    actor.sendMessage(spaceId, {
+      type: 'generic',
+      version: '1',
+      color: appColor,
+      text: line.text
     })
+    .then(message => nextLine())
     .error(error => console.log(error))
   }
 
   if (line.filename) {
     console.log(`${line.actor} sent ${line.filename}`)
     actor.sendFile(spaceId, `${dir}/${line.filename}`)
-    .then(message => {
-      lineCounter++
-      callback()
-    })
+    .then(message => nextLine())
     .error(error => console.log(error))
   }
+}
+
+// proceed to the next line in sequence
+function nextLine () {
+  console.log(`.`)  // just indicates the previous line was processed
+  lineCounter++
+  printQueueCard()
+  callback()
 }
