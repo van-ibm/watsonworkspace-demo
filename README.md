@@ -58,6 +58,10 @@ A script is defined as `script.json` in a directory of your choice. Think of it 
       "delay": 5000
     },
     {
+      "comment": true,
+      "text": "Now switch to the Sales space and talk about something."
+    }
+    {
       "actor": "Winston",
       "space": "sales",
       "filename": "2018 Trends.PDF"
@@ -118,6 +122,13 @@ All assets such as the `script.json` and files should reside in the directory. T
 Additionally, any actors will be authenticated and their photos uploaded.
 
 After all actors are authenticated, you can use the `enter` key on the terminal to send manual messages or wait for automatic messages to queue.
+
+## Controlling the App
+Use the following commands to control how lines are processed:
+- [s] Skip the line
+- [c] Copy the line to the clipboard
+- [z] Back up one line
+- [space] Process the line
 
 ## Stopping or Restarting
 
