@@ -270,6 +270,10 @@ function toString (line) {
 
 // tries to simulate natural reading and typing proficiency level
 function simulateDelay (line) {
+  if (line.text === undefined) {
+    return 0
+  }
+
   // average reading and typing words per minute
   const rate = {
     read: 200,
