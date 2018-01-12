@@ -9,11 +9,21 @@ const fs = require('fs')
 const readline = require('readline')
 const SDK = require('watsonworkspace-sdk')
 
-SDK.level('error')
-
 // the directory with script and assets is a command line argument
-const dir = process.argv[2]
-const script = JSON.parse(fs.readFileSync(`${__dirname}/scripts/${dir}/script.json`, 'utf8'))
+const directory = process.argv[2]
+const script = JSON.parse(fs.readFileSync(`${directory}/script.json`, 'utf8'))
+substituteNames()
+
+const botFramework = require('watsonworkspace-bot')
+
+// start the framework with HTTPS settings since we're using OAuth
+botFramework.startServer({
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem')
+})
+
+SDK.level('error')
+botFramework.level('error')
 
 const app = createApp()
 
@@ -26,17 +36,8 @@ const appColor = '#FFFFFF'
 
 // authenticate the demo app
 app.authenticate()
-.then(token => app.uploadPhoto(`${__dirname}/photos/App.jpg`))
 .then(body => {
-  console.log(`
- ~~ Watson Workspace Demo Bot ~~
- Use the following commands:
- [s] Skip the line
- [c] Copy the line to the clipboard
- [z] Back up one line
- [space] Process the line
-
-  `)
+  printHelp()
 
   // read in from the terminal
   readline.emitKeypressEvents(process.stdin)
@@ -46,6 +47,10 @@ app.authenticate()
       process.exit()
     } else {
       switch (key.name) {
+        case 'a':
+          console.log('[add]'.green)
+          addActors()
+          break
         case 's':
           console.log('[skip]'.green)
           nextLine()
@@ -61,6 +66,10 @@ app.authenticate()
         case 'e':
           console.log('[exec]'.green)
           exec()
+          break
+        case 'u':
+          console.log('[upload]'.green)
+          uploadPhotos()
           break
         case 'space':
           console.log('[send]'.green)
@@ -96,22 +105,70 @@ app.authenticate()
   })
 })
 
+function addActors () {
+  const roster = {}
+  const spaces = script.spaces
+
+  // iterate over all lines in the script
+  script.lines.forEach(line => {
+    // some lines are comments and have no actor
+    if (line.actor) {
+      const bot = script.actors[line.actor]
+
+      // the user may have an actor but forgot to add the bot; error
+      if (!bot) {
+        console.log(`No bot information found for actor ${line.actor}`)
+      } else {
+        // add the actor to the roster in the correct space
+        // dereference the space display name with the real id
+        if (line.space) {
+          const spaceId = spaces[line.space]
+          const actorId = bot.id
+
+          if (roster[spaceId] === undefined) {
+            roster[spaceId] = {}
+          }
+
+          roster[spaceId][actorId] = ''
+        }
+      }
+    }
+  })
+
+  // add the actors to the respective spaces
+  const spaceIds = Object.getOwnPropertyNames(roster)
+  spaceIds.forEach(spaceId => {
+    const actorIds = Object.getOwnPropertyNames(roster[spaceId])
+
+    // apps can only be added using the OAuth token - must use asUser
+    const asUser = app.asUser(script.asUser)
+    if (asUser) {
+      asUser.getMe(['displayName'])
+      .then(person => {
+        console.log(`Adding actors using ${person.me.displayName}`)
+        return asUser.addMember(spaceId, actorIds)
+      })
+      .then(message => console.log(`Added ${actorIds} to ${spaceId} ${JSON.stringify(message)}`))
+      .catch(error => console.log(`Error adding ${actorIds} to ${spaceId} ${error}`))
+    } else {
+      printOauthHelp()
+    }
+  })
+}
+
 // create the demo app
 function createApp () {
-  // use a .env file to define the APP_ID and APP_SECRET or get from script
   const app = script.app
-  if (app) {
-    const credentials = app.split(':')
-    return new SDK(credentials[0], credentials[1])
-  } else {
-    return new SDK(process.env.APP_ID, process.env.APP_SECRET)
-  }
+  const bot = botFramework.create(app.id, app.secret)
+
+  return bot
 }
 
 // prints the next line and details to you (the director)
 function printQueueCard () {
   const line = script.lines[lineCounter]
-  const actor = line.actor || 'App'
+  const actor = script.actors[line.actor]
+  const name = actor ? actor.name : 'App'
   const delay = line.delay || 0
 
   // 'wait'
@@ -123,7 +180,7 @@ function printQueueCard () {
   }
 
   // 'auto 2s VAN'
-  queueCard += `${actor.toUpperCase().magenta}`
+  queueCard += `${name.toUpperCase().magenta}`
 
   if (line.text) {
     let text = (typeof line.text) === 'string' ? line.text : toString(line)
@@ -140,44 +197,66 @@ function printQueueCard () {
   }
 }
 
+function listActors () {
+  return Object.getOwnPropertyNames(script.actors)
+}
+
 // authenticate and upload photo for actors
 function stageActors (callback) {
-  const actors = Object.getOwnPropertyNames(script.actors)
+  const actors = listActors()
 
   async.eachSeries(
     actors,
     (actor, cb) => {
-      const clientSecret = script.actors[actor].split(':')
-      const sdk = new SDK(clientSecret[0], clientSecret[1])
+      const id = script.actors[actor].id
+      const secret = script.actors[actor].secret
 
-      sdk.authenticate()
-      .then(token => {
-        // create the SDK for this actor
-        script.actors[actor] = sdk  // replace the token with the SDK
-        console.log(`${actor} READY`)
+      if (id && secret) {
+        const sdk = new SDK(id, secret) // create the SDK for this actor
 
-        // upload the actor's photo
-        if (script.uploadPhotos) {
-          sdk.uploadPhoto(`${__dirname}/photos/${actor}.jpg`)
-          .then(body => console.log(`${actor} photo uploaded`))
-          cb()
-        } else {
-          cb()  // move to the next actor (the upload will occur asynchronously)
-        }
-      })
-      .catch(error => {
-        console.log(`${actor} FAILED with ${error}`)
-        cb(error)
-      })
+        sdk.authenticate()
+        .then(token => {
+          script.actors[actor].bot = sdk  // save the SDK to the actor
+          console.log(`${actor} ${'READY'.green}`)
+          cb()  // move to the next actor
+        })
+        .catch(error => {
+          console.log(`${actor} ${'FAILED'.red} with ${error}`)
+          cb(error)
+        })
+      } else {
+        cb()
+      }
     },
     error => {
       if (!error) {
-        console.log(`
- ~~ Action! ~~
- `)
+        printOauthHelp()
+        console.log(`Action!\n`)
       }
 
       callback(error)
+    })
+}
+
+function uploadPhotos () {
+  const actors = listActors()
+
+  if (script.app.photo) {
+    app.uploadPhoto(`${directory}/${script.app.photo}`)
+  }
+
+  async.eachSeries(
+    actors,
+    (actor, cb) => {
+      const bot = script.actors[actor].bot
+      const name = script.actors[actor].name
+      const photo = script.actors[actor].photo
+
+      if (photo) {
+        bot.uploadPhoto(`${directory}/${photo}`)
+        .then(body => console.log(`${name} photo uploaded`))
+      }
+      cb()
     })
 }
 
@@ -210,7 +289,7 @@ function simulateDelay (line) {
   return delay
 }
 
-function copyToClipboard () {
+function copyToClipboard (text) {
   const line = script.lines[lineCounter]
   const proc = child.spawn('pbcopy')
 
@@ -226,16 +305,28 @@ function exec () {
   child.stderr('data', (data) => console.log(data))
 }
 
+function substituteNames () {
+  script.lines.forEach(line => {
+    if (line.text) {
+      const actors = listActors()
+      actors.forEach(actor => {
+        const name = script.actors[actor].name  // could be undefined
+        line.text = line.text.replace(`{{${actor}}}`, name)
+      })
+    }
+  })
+}
+
 // send either a text message or file that is the current line in queue
 function sendLine () {
   const line = script.lines[lineCounter]
-  const actor = script.actors[line.actor] || app
+  const bot = line.actor ? script.actors[line.actor].bot : app
   const spaceId = script.spaces[line.space]
 
   if (line.text) {
     // the comment guard prevents any accidental messages from going into the space
     if (!line.comment) {
-      actor.sendMessage(spaceId, {
+      bot.sendMessage(spaceId, {
         type: 'generic',
         version: '1',
         color: appColor,
@@ -258,7 +349,7 @@ function sendLine () {
 
   if (line.filename) {
     console.log(`${line.actor} sent ${line.filename}`)
-    actor.sendFile(spaceId, `${__dirname}/scripts/${dir}/${line.filename}`)
+    bot.sendFile(spaceId, `${directory}/${line.filename}`)
     .then(message => nextLine())
     .error(error => console.log(error))
   }
@@ -275,11 +366,28 @@ function prevLine () {
 function nextLine () {
   lineCounter++
 
-  // no more lines; end the program
+  // no more lines end the program
   if (lineCounter === script.lines.length) {
     process.exit()
   }
 
   printQueueCard()
   callback()
+}
+
+function printHelp () {
+  console.log(`
+~~ Watson Workspace Demo Bot ~~
+Use the following commands:
+[a] Add bots to spaces
+[c] Copy the line to the clipboard
+[s] Skip the line
+[u] Upload bot photos
+[z] Back up one line
+[space] Process the line
+`)
+}
+
+function printOauthHelp () {
+  console.log(`\nAuthenticate yourself with https://localhost:3000/${script.app.id}/oauth\n`)
 }
