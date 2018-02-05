@@ -12,6 +12,7 @@
     "async": "^2.6.0",
     "colors": "^1.1.2",
     "dotenv": "^4.0.0",
+    "watsonworkspace-bot": "^1.0.5",
     "watsonworkspace-sdk": "^1.0.6"
   }
 }

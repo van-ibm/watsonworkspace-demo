@@ -22,7 +22,7 @@ botFramework.startServer({
   cert: fs.readFileSync('cert.pem')
 })
 
-SDK.level('error')
+SDK.level('verbose')
 botFramework.level('error')
 
 const app = createApp()
@@ -66,6 +66,10 @@ app.authenticate()
         case 'e':
           console.log('[exec]'.green)
           exec()
+          break
+        case 'p':
+          console.log('[print]'.green)
+          printScript()
           break
         case 'u':
           console.log('[upload]'.green)
@@ -195,6 +199,19 @@ function printQueueCard () {
   if (line.filename) {
     console.log(`${queueCard} sending ${line.filename}`)
   }
+}
+
+function printScript () {
+  script.lines.forEach(line => {
+    if (line.text) {
+      if (line.comment) {
+        console.log(`[${line.text}]`)
+      } else {
+        const actor = line.actor ? script.actors[line.actor].name : ''
+        console.log(`${actor.toUpperCase()}: ${line.text}`)
+      }
+    }
+  })
 }
 
 function listActors () {
